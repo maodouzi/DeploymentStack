@@ -1,0 +1,235 @@
+ [转]Ubuntu 12.04 Gitolite 安装指南 2012-09-07 10:46:17
+
+分类： 系统运维
+
+先概述一下，你手上有一台全新的 Ubuntu Server，参照本文会安装下列内容：
+　　1、Git（这是肯定的）
+　　2、Gitolite（用于Git服务器管理，简介参见附注2）
+　　3、Gitdaemon（守护进程，开放一个公共的 git clone 服务，可选）
+　　4、Gitweb（提供像Github一样的Web服务，通过浏览器查看版本库记录，可选）
+
+下面就开始动手吧。
+
+一、安装 Git
+
+安装 Git 和 Git Doc：
+
+sudo apt-get install git-core git-doc
+
+设置用户信息：
+
+git config --global user.name "Your Name"
+git config --global user.email your@email.com
+
+二、安装 Gitolite
+
+Gitolite 使用SSH进行访问控制。首先将本机的SSH公钥（生成方法参见附注3：ssh-keygen）放到服务器上：
+
+# FROM YOUR LOCAL MACHINE
+scp ~/.ssh/id_rsa.pub git.server:/tmp/your-username-goes-here.pub
+
+创建 gitolite 用户组和 gitolite 用户
+
+sudo addgroup gitolite
+sudo adduser --disabled-password --home /home/gitolite --ingroup gitolite gitolite
+
+安装 Gitolite：
+
+sudo apt-get -y install gitolite apache2
+
+添加权限以便 gitweb 能够读取版本库内容：
+
+sudo usermod -a -G gitolite www-data
+
+重启apache服务：
+
+sudo service apache2 restart
+
+执行Gitolite安装：
+
+sudo su - gitolite
+gl-setup /tmp/your-username-goes-here.pub
+
+安装过程中会询问你是否修改配置文件，这时候可以修改一下权限以便 git-web 和 git-daemon 能够读取新建的版本库：将 $REPO_UMASK = 0077; 修改为 $REPO_UMASK = 0027;
+
+如果出于某种原因在安装过程中你没能修改 .gitolite.rc 文件，可以按如下方式编辑：
+
+emacs /home/gitolite/.gitolite.rc
+# 将 $REPO_UMASK = 0077; 改为 $REPO_UMASK = 0027;
+chmod g+r /home/gitolite/projects.list
+chmod -R g+rx /home/gitolite/repositories
+
+退出 gitolite 账户：
+
+exit
+
+搞定！服务器端的工作已经完成了。
+
+三、通过 Gitolite 管理 Git 服务器
+
+现在你应该已经可以将安装脚本创建的 gitolite-admin 版本库克隆到你的本机了：
+
+# FROM YOUR LOCAL MACHINE
+git clone gitolite@git.server:gitolite-admin.git
+
+编辑 gitolite.conf 文件，创建一个名为 testing 的版本库，并且允许 git-web 和 git-daemon 的访问：
+
+# FROM YOUR LOCAL MACHINE
+cd gitolite-admin
+emacs conf/gitolite.conf
+# change to:
+repo    testing
+      RW+     =   @all
+      R       =   daemon
+testing "Owner" = "Test repo"
+
+提交并推送至服务器。
+
+git add conf/gitolite.conf
+git commit -m "Enabled gitweb and git-daemon export for testing repo"
+git push
+cd ..
+
+在本机Clone出testing版本库并添加个文件看看：
+
+git clone gitolite@git.server:testing.git
+cd testing
+echo "README" > README
+git add README
+git commit -m "Added README"
+git push origin master
+
+四、配置 Git-Daemon
+
+git-daemon 使你可以开放一个公共的git服务，任何人都无需帐号直接使用 git clone 命令克隆版本库到本地。无需此功能的话，本步骤可以跳过。
+
+安装 git-daemon：
+
+sudo apt-get install git-daemon-run -y
+
+修改服务配置以便 git-daemon 能够以gitolite用户组的身份运行（gitolite用户组对版本库拥有读权限）
+
+sudo emacs /etc/sv/git-daemon/run
+
+将
+
+#!/bin/sh
+exec 2>&1
+echo 'git-daemon starting.'
+exec chpst -ugitdaemon \
+  "$(git --exec-path)"/git-daemon --verbose --base-path=/var/cache /var/cache/git
+
+
+修改为：
+
+#!/bin/sh
+exec 2>&1
+echo 'git-daemon starting.'
+exec chpst -ugitdaemon:gitolite \
+  "$(git --exec-path)"/git-daemon --verbose --base-path=/home/gitolite/repositories /home/gitolite/repositories
+
+重启 git-daemon 服务：
+
+sudo sv restart git-daemon
+
+搞定。
+现在你可以试试用下面的命令来克隆版本库了：
+
+git clone git://git.server/testing.git
+
+五、配置 Git-web
+
+git-web 允许你使用Web界面查看版本库，此步骤也是可选的。
+
+安装 git-web：
+
+sudo apt-get install highlight gitweb -y
+
+修改 git-web 配置：
+
+sudo emacs /etc/gitweb.conf
+# change $projectroot to /home/gitolite/repositories
+# change $projects_list to /home/gitolite/projects.list
+
+现在你可以到 http://git-server/gitweb 在线查看版本库了。
+
+还可以做一些增强配置，比如在 /etc/gitweb.conf 中开启 pretty url：
+
+sudo emacs /etc/gitweb.conf
+
+
+添加下列内容：
+
+# Enable PATH_INFO so the server can produce URLs of the
+# form: http://git.cdwilson.us/project.git/xxx/xxx
+# This allows for pretty URLs *within* the Git repository, where
+# my Apache rewrite rules are not active.
+$feature{'pathinfo'}{'default'} = [1];
+
+还有更多：
+
+$projects_list_description_width = 100;
+
+# Enable blame, pickaxe search, snapshop, search, and grep
+# support, but still allow individual projects to turn them off.
+# These are features that users can use to interact with your Git trees. They
+# consume some CPU whenever a user uses them, so you can turn them off if you
+# need to. Note that the 'override' option means that you can override the
+# setting on a per-repository basis.
+$feature{'blame'}{'default'} = [1];
+$feature{'blame'}{'override'} = 1;
+
+$feature{'pickaxe'}{'default'} = [1];
+$feature{'pickaxe'}{'override'} = 1;
+
+$feature{'snapshot'}{'default'} = [1];
+$feature{'snapshot'}{'override'} = 1;
+
+$feature{'search'}{'default'} = [1];
+
+$feature{'grep'}{'default'} = [1];
+$feature{'grep'}{'override'} = 1;
+
+$feature{'show-sizes'}{'default'} = [1];
+$feature{'show-sizes'}{'override'} = 1;
+
+$feature{'avatar'}{'default'} = ['gravatar'];
+$feature{'avatar'}{'override'} = 1;
+
+$feature{'highlight'}{'default'} = [1];
+$feature{'highlight'}{'override'} = 1;
+
+六、添加用户
+
+用户生成公钥（参见附注3）发送给Git管理员（也就是你）
+把这个公钥放到 gitolite-admin/keypair 目录下，记得名字改为 account-name.pub，
+并且修改 conf/gitolite.conf 添加此用户（例如，到developer用户组里）：
+
+@developer root, account-name
+
+
+最后别忘了 push 到服务器。
+
+gitolite.conf 的书写规则参见文档：http://sitaramc.github.com/gitolite/admin.html
+
+添加完之后此用户就可以用 git clone gitolite@host:repo-name 来克隆版本库到本地，pull 以及 push了。
+
+附注：
+
+    参考资料：
+    http://computercamp.cdwilson.us/git-gitolite-git-daemon-gitweb-setup-on-ubunt
+    http://sitaramc.github.com/gitolite/master-toc.html
+    http://www.tipstank.com/2011/09/01/adding-users-to-gitolite/
+    Gitolite的管理思路是完全Git化的。服务器上有一个名为“gitolite-admin”的repo，存储Git服务配置，你只要克隆到本机，修改并push，服务器端会自动完成配置更新。大多数管理任务都无需登录服务器，可以直接在本机搞定。
+    如何生成SSH公钥：
+    打开GitBash，执行 ssh-keygen 然后一直回车（三次）即可，最后得到结果：
+
+    Your identification has been saved in /c/Users/xwjin/.ssh/id_rsa.
+    Your public key has been saved in /c/Users/xwjin/.ssh/id_rsa.pub.
+    The key fingerprint is:
+    ef:76:60:21:af:58:0b:16:a5:21:83:a5:c6:d3:1e:1b xwjin@XWJIN-PC
+
+
+    得到的 id_rsa.pub 就是本机的公钥了。
+
+
