@@ -10,6 +10,7 @@ stopQuantum
 startQuantumCtrl
 
 myT3 "Check Quantum Type"
+quantum --os-username admin --os-password ${REMOTE_PASSWD} --os-tenant-name admin --os-auth-url http://${KEYSTONE_IP}:5000/v2.0 net-list
 
 myT2 "End Init Quantum!"
 

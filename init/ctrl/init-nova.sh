@@ -24,7 +24,7 @@ nova-manage service list
 
 myT3 "Add Cross Image"
 TENANT_ID=$(get_tenant_id admin)
-
+cat << TEST
 ttyImageId=$(get_glance_index_id tty-linux)
 if [ "x${ttyImageId}" = "x" ];then
 	glance --os-username admin --os-password  ${REMOTE_PASSWD}  --os-tenant-id ${TENANT_ID} --os-auth-url http://${KEYSTONE_IP}:5000/v2.0 add name="tty-linux" kernel_id=${kernelId} ramdisk_id=${ramdiskId} disk_format=ami container_format=ami < ~/images/ttylinux-uec-${ARCH_TYPE}-12.1_2.6.35-22_1.img
@@ -41,6 +41,11 @@ ttyInstanceId=$(get_nova_instance_id tty-linux)
 if [ "x${ttyInstanceId}" = "x" ];then
 	echo "nova --os-username admin --os-password  ${REMOTE_PASSWD}  --os-tenant-name admin --os-auth-url http://${KEYSTONE_IP}:5000/v2.0 boot --flavor 1 --image ${ttyImageId} --key_name mykey --security_group default tty-linux"
 	ttyInstanceId=$(get_nova_instance_id tty-linux)
+fi
+TEST
+testUbuntuId=$(get_glance_index_id testUbuntu)
+if [ "x${testUbuntuId}" = "x" ];then
+    glance --os-username admin --os-password  ${REMOTE_PASSWD}  --os-tenant-id ${TENANT_ID} --os-auth-url http://${KEYSTONE_IP}:5000/v2.0 image-create --location http://uec-images.ubuntu.com/releases/12.04/release/ubuntu-12.04-server-cloudimg-amd64-disk1.img --is-public true --disk-format qcow2 --container-format bare --name "testUbuntu"
 fi
 
 myT3 "Check Nova"

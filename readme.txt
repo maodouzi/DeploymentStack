@@ -39,6 +39,7 @@ Tip_1 Install Basic OS
 	Tip_1_3 Maybe Need Modify user/password
 		userdel pear && groupadd trystack && useradd -d /home/trystack -g trystack trystack -s "/bin/bash"  && passwd trystack && passwd
 		mv /home/pear /home/trystack
+		/etc/sudoers => pear / stack
 
 Tip_2  Install Dep Packages & Config Remote VM
     Tip_2_1 Usage:
@@ -288,14 +289,57 @@ Tip_20 All_In_One
         Base Ubuntu 12.04, user/root/passwd + sshd
         Add /vdb for cinder, fdisk w/default*n/t/8e/w
         Net Set, reboot
+        user&root/home dir/password/sudo
+    
+    Tip_20_2 Git Server
+        
 
-    Tip_20_2 Steps
+    Tip_20_3 Steps
         0. localrc => All In One
         1. ./conf-vm.sh 192.168.122.40 AllInOne
+            Install mysql & rabbitmq
         2. ./install-ctrl.sh
+            init-db in mysql server
+            ./install keystone & init
+            ./install glance & init
         3. ./install-network.sh
         4. ./install-compute.sh 192.168.122.40
         5. ./init-ctrl.sh
         6. ./init-network.sh
         7. ./init-compute.sh 192.168.122.40
         8. log in, stop all, start all
+
+
+Tips:
+-from nova.openstack.common import cfg
++from oslo.config import cfg
+
+
+  110  sudo ip netns exec qrouter-04c9cb6f-23bf-4763-aa18-1e923f8f44de ip route add 0.0.0.0/24 via 172.16.0.1
+  111  sudo ip netns exec qrouter-04c9cb6f-23bf-4763-aa18-1e923f8f44de ifconfig
+  112  sudo ip netns exec qrouter-04c9cb6f-23bf-4763-aa18-1e923f8f44de ip route add 0.0.0.0/24 dev qg-cfb4e432-c6
+  113  sudo ip netns exec qrouter-04c9cb6f-23bf-4763-aa18-1e923f8f44de route -n
+  114  sudo ip netns exec qrouter-04c9cb6f-23bf-4763-aa18-1e923f8f44de ip route chg 0.0.0.0/24 via 172.16.0.1
+  115  sudo ip netns exec qrouter-04c9cb6f-23bf-4763-aa18-1e923f8f44de ping 172.16.0.1
+  116  sudo ip netns exec qrouter-04c9cb6f-23bf-4763-aa18-1e923f8f44de brctl show
+  117  sudo ip netns exec qrouter-04c9cb6f-23bf-4763-aa18-1e923f8f44de ovs-vsctl show
+  118  vim l3_agent.ini 
+  119  sudo screen -x network
+  120  sudo ip netns exec qrouter-04c9cb6f-23bf-4763-aa18-1e923f8f44de ovs-vsctl show
+  121  sudo ip netns exec qrouter-04c9cb6f-23bf-4763-aa18-1e923f8f44de route -n
+  122  sudo ip netns exec qrouter-04c9cb6f-23bf-4763-aa18-1e923f8f44de ip route add 172.16.0.0/24 dev qg-cfb4e432-c6
+  
+  
+  wget http://169.254.169.254
+  traceroute 8.8.8.8 
+  
+  Create Network, Subnet, ext & int
+  Create router, add 2 gateway, from 
+
+1. Create internal network/subnet, instance could get IP from dhcp, ping gateway failed.
+2. Create a router, add interface to internal network, ping gateway OK. but couldn't get 169.254.169.254, 
+    Because metadata agent in Network node couldn't reach, so couldn't trans 169.254.169.254:80 to 9697, see from iptables -t nat => redirect
+3. Create external network/subnet, remember subnet should cover your network node, or you need to add route manually, no disable gw, no dhcp
+4. set gateway in router, now we can ping external world
+5. Add floating IP
+6. Add rules in default secure group, TCP 22, ICMP -1 -1, CIRD.

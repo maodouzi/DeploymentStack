@@ -21,7 +21,9 @@ GITHUB_IP="207.97.227.239 github.com ${NEVER_MATCH}
 GITHUB_OPENSTACK="https://github.com/openstack/"
 
 #PIP_MIRROR=${PIP_MIRROR:-"http://e.pypi.python.org/simple"}
-PIP_MIRROR=${PIP_MIRROR:-"http://b.pypi.python.org/simple"}
+#PIP_MIRROR=${PIP_MIRROR:-"http://b.pypi.python.org/simple"}
+#PIP_MIRROR=${PIP_MIRROR:-"http://d.pypi.python.org/simple"}
+PIP_MIRROR=${PIP_MIRROR:-"http://pypi.python.org/simple"}
 
 REMOTE_USER=${REMOTE_USER:-"pear"}
 REMOTE_PASSWD=${REMOTE_PASSWD:-"231"}
@@ -54,8 +56,9 @@ CTRL_IP=${CTRL_IP:-"23"}
 NETWORK_IP=${NETWORK_IP:-"24"}
 KEYSTONE_IP=${KEYSTONE_IP:-"${CTRL_IP}"}
 SWIFT_PROXY_IP=${SWIFT_PROXY_IP:-"${CTRL_IP}"}
+GLANCE_IP=${GLANCE_IP:-"${CTRL_IP}"}
 
-IP_LIST="RABBITMQ_IP DB_IP CTRL_IP KEYSTONE_IP SWIFT_PROXY_IP NETWORK_IP"
+IP_LIST="RABBITMQ_IP DB_IP CTRL_IP KEYSTONE_IP SWIFT_PROXY_IP NETWORK_IP GLANCE_IP"
 for itemName in ${IP_LIST};do
     itemIp=$(eval "echo \${${itemName}}")
     eval "${itemName}=${BS_SUBNET}.${itemIp}"
@@ -217,7 +220,7 @@ function stopModule {
 }
 
 function startKeystone {
-	startModule keystone-all "/usr/bin/python /usr/local/bin/keystone-all -d -v --debug"
+	startModule keystone-all "/usr/bin/python /usr/local/bin/keystone-all"
 }
 
 function stopKeystone {
@@ -250,8 +253,8 @@ function stopSwift {
 }
 
 function startGlance {
-	startModule glance-api "/usr/bin/python /usr/local/bin/glance-api --debug"
-	startModule glance-registry "/usr/bin/python /usr/local/bin/glance-registry --debug"
+	startModule glance-api "/usr/bin/python /usr/local/bin/glance-api"
+	startModule glance-registry "/usr/bin/python /usr/local/bin/glance-registry"
 }
 
 function stopGlance {
@@ -272,6 +275,10 @@ function startNova {
 	startModule nova-novncproxy "${REMOTE_SRC_DIR}/noVNC/utils/nova-novncproxy --config-file /etc/nova/nova.conf --web ${REMOTE_SRC_DIR}/noVNC"
 }
 
+#-from nova.openstack.common import cfg
+#+from oslo.config import cfg
+# ${REMOTE_SRC_DIR}/noVNC/utils/nova-novncproxy
+
 function startNovaCompute {
 	startModule nova-compute "nova-compute"
 	startModule nova-xvpvncproxy "nova-xvpvncproxy --config-file /etc/nova/nova.conf"
@@ -280,12 +287,12 @@ function startNovaCompute {
 
 function startNovaCtrl {
 	startModule nova-api "nova-api"
-	startModule nova-scheduler "nova-scheduler"
 	startModule nova-cert "nova-cert"
-	startModule nova-consoleauth "nova-consoleauth"
-	startModule nova-conductor "nova-conductor"
-	startModule nova-xvpvncproxy "nova-xvpvncproxy --config-file /etc/nova/nova.conf"
-	startModule nova-novncproxy "${REMOTE_SRC_DIR}/noVNC/utils/nova-novncproxy --config-file /etc/nova/nova.conf --web ${REMOTE_SRC_DIR}/noVNC"
+    startModule nova-consoleauth "nova-consoleauth"
+    startModule nova-scheduler "nova-scheduler" 
+    startModule nova-conductor "nova-conductor"
+    startModule nova-xvpvncproxy "nova-xvpvncproxy --config-file /etc/nova/nova.conf"
+    startModule nova-novncproxy "${REMOTE_SRC_DIR}/noVNC/utils/nova-novncproxy --config-file /etc/nova/nova.conf --web ${REMOTE_SRC_DIR}/noVNC"
 }
 
 function stopNova {
